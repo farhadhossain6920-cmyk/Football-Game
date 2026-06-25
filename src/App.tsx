@@ -194,11 +194,9 @@ export default function App() {
       })
       .on('broadcast', { event: 'cursorMove' }, ({ payload }) => {
         if (roomRef.current && roomRef.current.hostId === myPlayer.id) {
-          const r = { ...roomRef.current };
-          if (r.players[payload.id]) {
-            r.players[payload.id].x = payload.x;
-            r.players[payload.id].y = payload.y;
-            setRoom(r);
+          if (roomRef.current.players[payload.id]) {
+            roomRef.current.players[payload.id].x = payload.x;
+            roomRef.current.players[payload.id].y = payload.y;
           }
         }
       })
@@ -244,11 +242,11 @@ export default function App() {
 
   const sendCursorMove = (x: number, y: number) => {
     if (room?.hostId === me?.id) {
-      const r = { ...room };
-      if (r.players[me.id]) {
-        r.players[me.id].x = x;
-        r.players[me.id].y = y;
-        setRoom(r);
+      // Host doesn't need to broadcast own cursor via 'cursorMove' event,
+      // it gets naturally bundled into the next 30Hz 'gameState' tick!
+      if (roomRef.current && roomRef.current.players[me.id]) {
+        roomRef.current.players[me.id].x = x;
+        roomRef.current.players[me.id].y = y;
       }
     } else {
       channel?.send({ type: 'broadcast', event: 'cursorMove', payload: { id: me?.id, x, y } });

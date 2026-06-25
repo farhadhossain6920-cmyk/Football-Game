@@ -20,6 +20,11 @@ const GOAL_WIDTH = 120;
 
 export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goalEvent }: PitchProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const roomRef = useRef<Room>(room);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
   
   useEffect(() => {
     if (goalEvent) {
@@ -33,6 +38,8 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
     }
   }, [goalEvent]);
 
+  const lastMoveTime = useRef<number>(0);
+
   // Handle local mouse move
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -45,7 +52,18 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
-    onCursorMove(x, y);
+    // Instant local update for buttery smooth 60fps local cursor
+    if (roomRef.current && roomRef.current.players[me.id]) {
+      roomRef.current.players[me.id].x = x;
+      roomRef.current.players[me.id].y = y;
+    }
+
+    // Throttle network broadcasts (roughly 20-30 times per sec)
+    const now = Date.now();
+    if (now - lastMoveTime.current > 40) {
+      lastMoveTime.current = now;
+      onCursorMove(x, y);
+    }
   };
 
   // Render loop
@@ -58,6 +76,9 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
     let animationFrameId: number;
 
     const render = () => {
+      const currentRoom = roomRef.current;
+      if (!currentRoom) return;
+
       // Clear pitch
       ctx.fillStyle = '#166534'; // emerald-800
       ctx.fillRect(0, 0, PITCH_WIDTH, PITCH_HEIGHT);
@@ -87,7 +108,7 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
       ctx.strokeRect(PITCH_WIDTH - 40, goalTop, 40, GOAL_WIDTH);
 
       // Draw players
-      Object.values(room.players).forEach(p => {
+      Object.values(currentRoom.players).forEach(p => {
         if (p.x < 0 || p.y < 0) return; // ignore if off-pitch
         
         ctx.save();
@@ -245,7 +266,7 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
       });
 
       // Draw ball
-      const ball = room.ball;
+      const ball = currentRoom.ball;
       ctx.save();
       ctx.translate(ball.x, ball.y);
       
@@ -304,11 +325,11 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
       ctx.restore();
 
       // Time remaining on canvas
-      const timeMins = Math.floor(room.timeRemaining / 60);
-      const timeSecs = Math.floor(room.timeRemaining % 60).toString().padStart(2, '0');
+      const timeMins = Math.floor(currentRoom.timeRemaining / 60);
+      const timeSecs = Math.floor(currentRoom.timeRemaining % 60).toString().padStart(2, '0');
       
       ctx.save();
-      ctx.fillStyle = room.timeRemaining <= 10 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255, 255, 255, 0.2)';
+      ctx.fillStyle = currentRoom.timeRemaining <= 10 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255, 255, 255, 0.2)';
       ctx.font = 'bold 80px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -323,7 +344,7 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [room]); // Re-render when room updates
+  }, []); // Run once
 
   const teamAPlayers = Object.values(room.players).filter(p => p.team === 'A');
   const teamBPlayers = Object.values(room.players).filter(p => p.team === 'B');
