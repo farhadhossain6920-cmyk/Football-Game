@@ -63,6 +63,12 @@ export default function App() {
           const force = 10;
           ball.vx += (dx / dist) * force;
           ball.vy += (dy / dist) * force;
+          
+          if (ball.lastTouchedId !== p.id || (ball.lastTouchTime && now - ball.lastTouchTime > 500)) {
+            p.touches = (p.touches || 0) + 1;
+            ball.lastTouchedId = p.id;
+            ball.lastTouchTime = now;
+          }
         }
       }
 
@@ -103,10 +109,18 @@ export default function App() {
       }
 
       if (goalScored) {
+        if (ball.lastTouchedId && updatedRoom.players[ball.lastTouchedId]) {
+          const scorer = updatedRoom.players[ball.lastTouchedId];
+          if (scorer.team === goalScored || scorer.team === 'none') {
+            scorer.goals = (scorer.goals || 0) + 1;
+          }
+        }
+
         ball.x = PITCH_WIDTH / 2;
         ball.y = PITCH_HEIGHT / 2;
         ball.vx = 0;
         ball.vy = 0;
+        ball.lastTouchedId = undefined;
         channel.send({ type: 'broadcast', event: 'goalScored', payload: { team: goalScored } });
         setGoalEvent(goalScored);
         setTimeout(() => setGoalEvent(null), 2000);
@@ -121,7 +135,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [room?.status, me?.id, channel]);
 
-  const handleCreateRoom = (name: string, matchTime: number, maxPlayers: number) => {
+  const handleCreateRoom = (name: string, skin: string, matchTime: number, maxPlayers: number) => {
     if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes("placeholder")) {
       alert("Please configure Supabase environment variables (.env) first!");
       return;
@@ -129,7 +143,7 @@ export default function App() {
 
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     const myId = crypto.randomUUID();
-    const newMe: Player = { id: myId, name, color: getRandomColor(), score: 0, x: -100, y: -100 };
+    const newMe: Player = { id: myId, name, color: getRandomColor(), skin, score: 0, touches: 0, goals: 0, x: -100, y: -100, team: 'none' };
     setMe(newMe);
 
     const newRoom: Room = {
@@ -149,13 +163,13 @@ export default function App() {
     joinChannel(roomId, newRoom, newMe, true);
   };
 
-  const handleJoinRoom = (name: string, roomId: string) => {
+  const handleJoinRoom = (name: string, skin: string, roomId: string) => {
     if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes("placeholder")) {
       alert("Please configure Supabase environment variables (.env) first!");
       return;
     }
     const myId = crypto.randomUUID();
-    const newMe: Player = { id: myId, name, color: getRandomColor(), score: 0, x: -100, y: -100 };
+    const newMe: Player = { id: myId, name, color: getRandomColor(), skin, score: 0, touches: 0, goals: 0, x: -100, y: -100, team: 'none' };
     setMe(newMe);
     joinChannel(roomId, null, newMe, false);
   };
@@ -195,6 +209,16 @@ export default function App() {
         setGoalEvent(payload.team);
         setTimeout(() => setGoalEvent(null), 2000);
       })
+      .on('broadcast', { event: 'teamChange' }, ({ payload }) => {
+        if (roomRef.current && roomRef.current.hostId === myPlayer.id) {
+          const r = { ...roomRef.current };
+          if (r.players[payload.id]) {
+            r.players[payload.id].team = payload.team;
+            setRoom(r);
+            newChannel.send({ type: 'broadcast', event: 'gameState', payload: r });
+          }
+        }
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           if (!isHost) {
@@ -207,6 +231,12 @@ export default function App() {
   const startGame = () => {
     if (room && room.hostId === me?.id) {
       const updated = { ...room, status: 'playing' as const, timeRemaining: room.matchTime, ball: { x: PITCH_WIDTH / 2, y: PITCH_HEIGHT / 2, vx: 0, vy: 0 }, score: { teamA: 0, teamB: 0 } };
+      
+      Object.values(updated.players).forEach(p => {
+        p.touches = 0;
+        p.goals = 0;
+      });
+
       setRoom(updated);
       channel?.send({ type: 'broadcast', event: 'gameState', payload: updated });
     }
@@ -239,12 +269,26 @@ export default function App() {
     setChatMessages(prev => [...prev, msg]);
   };
 
+  const handleJoinTeam = (team: 'A' | 'B' | 'none') => {
+    if (!room || !me) return;
+    if (room.hostId === me.id) {
+      const r = { ...room };
+      if (r.players[me.id]) {
+        r.players[me.id].team = team;
+        setRoom(r);
+        channel?.send({ type: 'broadcast', event: 'gameState', payload: r });
+      }
+    } else {
+      channel?.send({ type: 'broadcast', event: 'teamChange', payload: { id: me.id, team } });
+    }
+  };
+
   if (!room) {
     return <Lobby onCreate={handleCreateRoom} onJoin={handleJoinRoom} />;
   }
 
   if (room.status === 'waiting') {
-    return <WaitingRoom room={room} me={me!} onStart={startGame} />;
+    return <WaitingRoom room={room} me={me!} onStart={startGame} onJoinTeam={handleJoinTeam} />;
   }
 
   return (

@@ -11,9 +11,13 @@ export interface Player {
   id: string;
   name: string;
   color: string;
+  skin: string;
   score: number;
+  touches: number;
+  goals: number;
   x: number;
   y: number;
+  team: 'A' | 'B' | 'none';
 }
 
 export interface Room {
@@ -29,6 +33,8 @@ export interface Room {
     y: number;
     vx: number;
     vy: number;
+    lastTouchedId?: string;
+    lastTouchTime?: number;
   };
   score: {
     teamA: number;

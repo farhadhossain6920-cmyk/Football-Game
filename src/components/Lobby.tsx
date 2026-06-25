@@ -1,13 +1,21 @@
 import React, { useState } from 'react';
-import { Plus, LogIn } from 'lucide-react';
+import { Plus, LogIn, PaintBucket } from 'lucide-react';
 
 interface LobbyProps {
-  onCreate: (name: string, matchTime: number, maxPlayers: number) => void;
-  onJoin: (name: string, roomId: string) => void;
+  onCreate: (name: string, skin: string, matchTime: number, maxPlayers: number) => void;
+  onJoin: (name: string, skin: string, roomId: string) => void;
 }
+
+const SKINS = [
+  { id: 'classic', label: 'Classic Player' },
+  { id: 'ninja', label: 'Stealth Ninja' },
+  { id: 'robot', label: 'Mecha Robot' },
+  { id: 'cat', label: 'Speedy Cat' },
+];
 
 export function Lobby({ onCreate, onJoin }: LobbyProps) {
   const [name, setName] = useState('');
+  const [skin, setSkin] = useState('classic');
   const [roomId, setRoomId] = useState('');
   const [matchTime, setMatchTime] = useState(60);
   const [maxPlayers, setMaxPlayers] = useState(4);
@@ -15,13 +23,13 @@ export function Lobby({ onCreate, onJoin }: LobbyProps) {
 
   const handleCreate = () => {
     if (!name.trim()) return setError('Please enter your name');
-    onCreate(name, matchTime, maxPlayers);
+    onCreate(name, skin, matchTime, maxPlayers);
   };
 
   const handleJoin = () => {
     if (!name.trim()) return setError('Please enter your name');
     if (!roomId.trim()) return setError('Please enter a room ID');
-    onJoin(name, roomId.toUpperCase());
+    onJoin(name, skin, roomId.toUpperCase());
   };
 
   return (
@@ -48,6 +56,28 @@ export function Lobby({ onCreate, onJoin }: LobbyProps) {
               placeholder="Enter your name..."
               maxLength={15}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-2 flex items-center">
+              <PaintBucket className="w-4 h-4 mr-2" />
+              Choose Skin
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {SKINS.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setSkin(s.id)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    skin === s.id
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50 scale-[1.02] border-emerald-500'
+                      : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border-slate-700 hover:text-white'
+                  } border`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="pt-4 border-t border-slate-700">

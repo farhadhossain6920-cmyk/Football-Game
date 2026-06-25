@@ -1,18 +1,23 @@
 import React from 'react';
 import { Room, Player } from '../types';
-import { Play, Copy, Check, Users } from 'lucide-react';
+import { Play, Copy, Check, Users, Shield } from 'lucide-react';
 
 interface WaitingRoomProps {
   room: Room;
   me: Player;
   onStart: () => void;
+  onJoinTeam: (team: 'A' | 'B' | 'none') => void;
 }
 
-export function WaitingRoom({ room, me, onStart }: WaitingRoomProps) {
+export function WaitingRoom({ room, me, onStart, onJoinTeam }: WaitingRoomProps) {
   const [copied, setCopied] = React.useState(false);
   
   const isHost = room.hostId === me.id;
   const players = Object.values(room.players);
+
+  const teamA = players.filter(p => p.team === 'A');
+  const teamB = players.filter(p => p.team === 'B');
+  const unassigned = players.filter(p => p.team === 'none');
 
   const handleCopy = () => {
     navigator.clipboard.writeText(room.id);
@@ -20,9 +25,21 @@ export function WaitingRoom({ room, me, onStart }: WaitingRoomProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const renderPlayer = (p: Player) => (
+    <div key={p.id} className="flex items-center space-x-3 bg-slate-800 p-3 rounded-lg border border-slate-700">
+      <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+      <span className="font-medium truncate">{p.name}</span>
+      {p.id === room.hostId && (
+        <span className="ml-auto text-xs bg-emerald-900 text-emerald-300 px-2 py-1 rounded-full flex-shrink-0">
+          Host
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-4">
-      <div className="w-full max-w-2xl bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
+      <div className="w-full max-w-4xl bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
         <div className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-3xl font-bold mb-2">Waiting Room</h1>
@@ -44,29 +61,74 @@ export function WaitingRoom({ room, me, onStart }: WaitingRoomProps) {
           </div>
         </div>
 
-        <div className="bg-slate-900 rounded-lg p-6 border border-slate-700 mb-8">
-          <h2 className="text-lg font-semibold mb-4 flex items-center border-b border-slate-800 pb-2">
-            <Users className="w-5 h-5 mr-2" />
-            Players ({players.length}/{room.maxPlayers})
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            {players.map(p => (
-              <div key={p.id} className="flex items-center space-x-3 bg-slate-800 p-3 rounded-lg border border-slate-700">
-                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.color }} />
-                <span className="font-medium truncate">{p.name}</span>
-                {p.id === room.hostId && (
-                  <span className="ml-auto text-xs bg-emerald-900 text-emerald-300 px-2 py-1 rounded-full">
-                    Host
-                  </span>
-                )}
-              </div>
-            ))}
-            {Array.from({ length: room.maxPlayers - players.length }).map((_, i) => (
-              <div key={`empty-${i}`} className="flex items-center space-x-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700/50 text-slate-500 border-dashed">
-                <div className="w-4 h-4 rounded-full bg-slate-700" />
-                <span className="italic">Waiting...</span>
-              </div>
-            ))}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Team A */}
+          <div className="bg-slate-900 rounded-lg p-4 border border-cyan-900/50">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h2 className="text-lg font-bold text-cyan-400 flex items-center">
+                <Shield className="w-5 h-5 mr-2" />
+                Team A
+              </h2>
+              <span className="text-slate-500 text-sm">{teamA.length}</span>
+            </div>
+            <div className="space-y-3 mb-4">
+              {teamA.map(renderPlayer)}
+              {teamA.length === 0 && <div className="text-slate-500 italic text-sm text-center py-2">Empty</div>}
+            </div>
+            {me.team !== 'A' && (
+              <button 
+                onClick={() => onJoinTeam('A')}
+                className="w-full py-2 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 rounded border border-cyan-800 transition text-sm font-bold"
+              >
+                Join Team A
+              </button>
+            )}
+          </div>
+
+          {/* Unassigned */}
+          <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h2 className="text-lg font-bold text-slate-300 flex items-center">
+                <Users className="w-5 h-5 mr-2" />
+                Unassigned
+              </h2>
+              <span className="text-slate-500 text-sm">{unassigned.length}</span>
+            </div>
+            <div className="space-y-3 mb-4">
+              {unassigned.map(renderPlayer)}
+              {unassigned.length === 0 && <div className="text-slate-500 italic text-sm text-center py-2">Empty</div>}
+            </div>
+             {me.team !== 'none' && (
+              <button 
+                onClick={() => onJoinTeam('none')}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded border border-slate-700 transition text-sm font-bold"
+              >
+                Leave Team
+              </button>
+            )}
+          </div>
+
+          {/* Team B */}
+          <div className="bg-slate-900 rounded-lg p-4 border border-red-900/50">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h2 className="text-lg font-bold text-red-400 flex items-center">
+                <Shield className="w-5 h-5 mr-2" />
+                Team B
+              </h2>
+              <span className="text-slate-500 text-sm">{teamB.length}</span>
+            </div>
+            <div className="space-y-3 mb-4">
+              {teamB.map(renderPlayer)}
+              {teamB.length === 0 && <div className="text-slate-500 italic text-sm text-center py-2">Empty</div>}
+            </div>
+             {me.team !== 'B' && (
+              <button 
+                onClick={() => onJoinTeam('B')}
+                className="w-full py-2 bg-red-950 hover:bg-red-900 text-red-400 rounded border border-red-800 transition text-sm font-bold"
+              >
+                Join Team B
+              </button>
+            )}
           </div>
         </div>
 
