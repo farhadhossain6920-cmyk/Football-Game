@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Plus, LogIn, PaintBucket } from 'lucide-react';
 
 interface LobbyProps {
-  onCreate: (name: string, skin: string, matchTime: number, maxPlayers: number) => void;
+  onCreate: (name: string, skin: string, matchTime: number, maxPlayers: number, hasGoalkeepers: boolean) => void;
   onJoin: (name: string, skin: string, roomId: string) => void;
 }
 
@@ -19,11 +19,12 @@ export function Lobby({ onCreate, onJoin }: LobbyProps) {
   const [roomId, setRoomId] = useState('');
   const [matchTime, setMatchTime] = useState(60);
   const [maxPlayers, setMaxPlayers] = useState(4);
+  const [hasGoalkeepers, setHasGoalkeepers] = useState(false);
   const [error, setError] = useState('');
 
   const handleCreate = () => {
     if (!name.trim()) return setError('Please enter your name');
-    onCreate(name, skin, matchTime, maxPlayers);
+    onCreate(name, skin, matchTime, maxPlayers, hasGoalkeepers);
   };
 
   const handleJoin = () => {
@@ -33,7 +34,7 @@ export function Lobby({ onCreate, onJoin }: LobbyProps) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-4">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-900 text-white p-4">
       <div className="w-full max-w-md bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
         <h1 className="text-4xl font-black text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
           CURSOR SOCCER
@@ -109,6 +110,20 @@ export function Lobby({ onCreate, onJoin }: LobbyProps) {
                 />
               </div>
             </div>
+            
+            <div className="mb-6 flex items-center bg-slate-900 border border-slate-700 rounded-lg p-3">
+              <input
+                type="checkbox"
+                id="gk-toggle"
+                checked={hasGoalkeepers}
+                onChange={(e) => setHasGoalkeepers(e.target.checked)}
+                className="w-4 h-4 text-emerald-500 bg-slate-800 border-slate-600 rounded focus:ring-emerald-500"
+              />
+              <label htmlFor="gk-toggle" className="ml-2 text-sm font-medium text-slate-300 flex-1 cursor-pointer">
+                Enable AI Goalkeepers
+              </label>
+            </div>
+
             <button
               onClick={handleCreate}
               className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-lg transition"

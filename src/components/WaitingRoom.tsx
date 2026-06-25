@@ -6,7 +6,7 @@ interface WaitingRoomProps {
   room: Room;
   me: Player;
   onStart: () => void;
-  onJoinTeam: (team: 'A' | 'B' | 'none') => void;
+  onJoinTeam: (team: 'A' | 'B' | 'none', role?: 'player' | 'gk') => void;
 }
 
 export function WaitingRoom({ room, me, onStart, onJoinTeam }: WaitingRoomProps) {
@@ -29,6 +29,9 @@ export function WaitingRoom({ room, me, onStart, onJoinTeam }: WaitingRoomProps)
     <div key={p.id} className="flex items-center space-x-3 bg-slate-800 p-3 rounded-lg border border-slate-700">
       <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
       <span className="font-medium truncate">{p.name}</span>
+      {p.role === 'gk' && (
+        <span className="text-xs bg-emerald-900 text-emerald-300 px-2 py-1 rounded-full font-bold ml-2">GK</span>
+      )}
       {p.id === room.hostId && (
         <span className="ml-auto text-xs bg-emerald-900 text-emerald-300 px-2 py-1 rounded-full flex-shrink-0">
           Host
@@ -38,7 +41,7 @@ export function WaitingRoom({ room, me, onStart, onJoinTeam }: WaitingRoomProps)
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-4">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] bg-slate-900 text-white p-4">
       <div className="w-full max-w-4xl bg-slate-800 rounded-xl shadow-2xl p-8 border border-slate-700">
         <div className="flex justify-between items-start mb-8">
           <div>
@@ -76,12 +79,20 @@ export function WaitingRoom({ room, me, onStart, onJoinTeam }: WaitingRoomProps)
               {teamA.length === 0 && <div className="text-slate-500 italic text-sm text-center py-2">Empty</div>}
             </div>
             {me.team !== 'A' && (
-              <button 
-                onClick={() => onJoinTeam('A')}
-                className="w-full py-2 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 rounded border border-cyan-800 transition text-sm font-bold"
-              >
-                Join Team A
-              </button>
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => onJoinTeam('A', 'player')}
+                  className="w-full py-2 bg-cyan-950 hover:bg-cyan-900 text-cyan-400 rounded border border-cyan-800 transition text-sm font-bold"
+                >
+                  Join Team A
+                </button>
+                <button 
+                  onClick={() => onJoinTeam('A', 'gk')}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-cyan-500 rounded border border-slate-700 transition text-xs font-semibold"
+                >
+                  Join as GK
+                </button>
+              </div>
             )}
           </div>
 
@@ -98,9 +109,9 @@ export function WaitingRoom({ room, me, onStart, onJoinTeam }: WaitingRoomProps)
               {unassigned.map(renderPlayer)}
               {unassigned.length === 0 && <div className="text-slate-500 italic text-sm text-center py-2">Empty</div>}
             </div>
-             {me.team !== 'none' && (
+            {me.team !== 'none' && (
               <button 
-                onClick={() => onJoinTeam('none')}
+                onClick={() => onJoinTeam('none', 'player')}
                 className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded border border-slate-700 transition text-sm font-bold"
               >
                 Leave Team
@@ -121,13 +132,21 @@ export function WaitingRoom({ room, me, onStart, onJoinTeam }: WaitingRoomProps)
               {teamB.map(renderPlayer)}
               {teamB.length === 0 && <div className="text-slate-500 italic text-sm text-center py-2">Empty</div>}
             </div>
-             {me.team !== 'B' && (
-              <button 
-                onClick={() => onJoinTeam('B')}
-                className="w-full py-2 bg-red-950 hover:bg-red-900 text-red-400 rounded border border-red-800 transition text-sm font-bold"
-              >
-                Join Team B
-              </button>
+            {me.team !== 'B' && (
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={() => onJoinTeam('B', 'player')}
+                  className="w-full py-2 bg-red-950 hover:bg-red-900 text-red-400 rounded border border-red-800 transition text-sm font-bold"
+                >
+                  Join Team B
+                </button>
+                <button 
+                  onClick={() => onJoinTeam('B', 'gk')}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-red-500 rounded border border-slate-700 transition text-xs font-semibold"
+                >
+                  Join as GK
+                </button>
+              </div>
             )}
           </div>
         </div>

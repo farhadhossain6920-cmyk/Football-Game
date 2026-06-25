@@ -18,6 +18,7 @@ export interface Player {
   x: number;
   y: number;
   team: 'A' | 'B' | 'none';
+  role?: 'player' | 'gk';
 }
 
 export interface Room {
@@ -40,5 +41,6 @@ export interface Room {
     teamA: number;
     teamB: number;
   };
+  hasGoalkeepers?: boolean;
   lastTick: number;
 }

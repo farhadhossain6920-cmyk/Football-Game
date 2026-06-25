@@ -6,11 +6,11 @@ import { WaitingRoom } from './components/WaitingRoom';
 import { Pitch } from './components/Pitch';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
-const PITCH_WIDTH = 800;
-const PITCH_HEIGHT = 500;
-const BALL_RADIUS = 15;
-const CURSOR_RADIUS = 20;
-const GOAL_WIDTH = 120;
+const PITCH_WIDTH = 1200;
+const PITCH_HEIGHT = 750;
+const BALL_RADIUS = 20;
+const CURSOR_RADIUS = 25;
+const GOAL_WIDTH = 240;
 
 export default function App() {
   const [room, setRoom] = useState<Room | null>(null);
@@ -51,6 +51,26 @@ export default function App() {
       ball.vx *= 0.98;
       ball.vy *= 0.98;
 
+      if (updatedRoom.hasGoalkeepers) {
+        const goalTop = PITCH_HEIGHT / 2 - GOAL_WIDTH / 2;
+        const goalBottom = PITCH_HEIGHT / 2 + GOAL_WIDTH / 2;
+        const gkSpeed = 4;
+        
+        const gkA = updatedRoom.players['gk-A'];
+        if (gkA) {
+          if (gkA.y < ball.y - 10) gkA.y += gkSpeed;
+          else if (gkA.y > ball.y + 10) gkA.y -= gkSpeed;
+          gkA.y = Math.max(goalTop, Math.min(goalBottom, gkA.y));
+        }
+
+        const gkB = updatedRoom.players['gk-B'];
+        if (gkB) {
+          if (gkB.y < ball.y - 10) gkB.y += gkSpeed;
+          else if (gkB.y > ball.y + 10) gkB.y -= gkSpeed;
+          gkB.y = Math.max(goalTop, Math.min(goalBottom, gkB.y));
+        }
+      }
+
       for (const playerId in updatedRoom.players) {
         const p = updatedRoom.players[playerId];
         if (p.x < 0 || p.y < 0) continue;
@@ -60,7 +80,7 @@ export default function App() {
         const dist = Math.sqrt(dx * dx + dy * dy);
         
         if (dist < BALL_RADIUS + CURSOR_RADIUS) {
-          const force = 10;
+          const force = 15;
           ball.vx += (dx / dist) * force;
           ball.vy += (dy / dist) * force;
           
@@ -135,7 +155,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [room?.status, me?.id, channel]);
 
-  const handleCreateRoom = (name: string, skin: string, matchTime: number, maxPlayers: number) => {
+  const handleCreateRoom = (name: string, skin: string, matchTime: number, maxPlayers: number, hasGoalkeepers: boolean) => {
     if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes("placeholder")) {
       alert("Please configure Supabase environment variables (.env) first!");
       return;
@@ -143,7 +163,7 @@ export default function App() {
 
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     const myId = crypto.randomUUID();
-    const newMe: Player = { id: myId, name, color: getRandomColor(), skin, score: 0, touches: 0, goals: 0, x: -100, y: -100, team: 'none' };
+    const newMe: Player = { id: myId, name, color: getRandomColor(), skin, score: 0, touches: 0, goals: 0, x: -100, y: -100, team: 'none', role: 'player' };
     setMe(newMe);
 
     const newRoom: Room = {
@@ -156,6 +176,7 @@ export default function App() {
       status: 'waiting',
       ball: { x: PITCH_WIDTH / 2, y: PITCH_HEIGHT / 2, vx: 0, vy: 0 },
       score: { teamA: 0, teamB: 0 },
+      hasGoalkeepers,
       lastTick: Date.now()
     };
     
@@ -169,7 +190,7 @@ export default function App() {
       return;
     }
     const myId = crypto.randomUUID();
-    const newMe: Player = { id: myId, name, color: getRandomColor(), skin, score: 0, touches: 0, goals: 0, x: -100, y: -100, team: 'none' };
+    const newMe: Player = { id: myId, name, color: getRandomColor(), skin, score: 0, touches: 0, goals: 0, x: -100, y: -100, team: 'none', role: 'player' };
     setMe(newMe);
     joinChannel(roomId, null, newMe, false);
   };
@@ -212,6 +233,7 @@ export default function App() {
           const r = { ...roomRef.current };
           if (r.players[payload.id]) {
             r.players[payload.id].team = payload.team;
+            r.players[payload.id].role = payload.role || 'player';
             setRoom(r);
             newChannel.send({ type: 'broadcast', event: 'gameState', payload: r });
           }
@@ -234,6 +256,11 @@ export default function App() {
         p.touches = 0;
         p.goals = 0;
       });
+
+      if (updated.hasGoalkeepers) {
+        updated.players['gk-A'] = { id: 'gk-A', name: 'Bot GK', color: '#06b6d4', skin: 'robot', score: 0, touches: 0, goals: 0, x: 40, y: PITCH_HEIGHT / 2, team: 'A', role: 'gk' };
+        updated.players['gk-B'] = { id: 'gk-B', name: 'Bot GK', color: '#ef4444', skin: 'robot', score: 0, touches: 0, goals: 0, x: PITCH_WIDTH - 40, y: PITCH_HEIGHT / 2, team: 'B', role: 'gk' };
+      }
 
       setRoom(updated);
       channel?.send({ type: 'broadcast', event: 'gameState', payload: updated });
@@ -267,17 +294,18 @@ export default function App() {
     setChatMessages(prev => [...prev, msg]);
   };
 
-  const handleJoinTeam = (team: 'A' | 'B' | 'none') => {
+  const handleJoinTeam = (team: 'A' | 'B' | 'none', role: 'player' | 'gk' = 'player') => {
     if (!room || !me) return;
     if (room.hostId === me.id) {
       const r = { ...room };
       if (r.players[me.id]) {
         r.players[me.id].team = team;
+        r.players[me.id].role = role;
         setRoom(r);
         channel?.send({ type: 'broadcast', event: 'gameState', payload: r });
       }
     } else {
-      channel?.send({ type: 'broadcast', event: 'teamChange', payload: { id: me.id, team } });
+      channel?.send({ type: 'broadcast', event: 'teamChange', payload: { id: me.id, team, role } });
     }
   };
 

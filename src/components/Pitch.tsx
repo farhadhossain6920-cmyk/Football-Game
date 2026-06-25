@@ -12,15 +12,16 @@ interface PitchProps {
   goalEvent: string | null;
 }
 
-const PITCH_WIDTH = 800;
-const PITCH_HEIGHT = 500;
-const BALL_RADIUS = 15;
-const CURSOR_RADIUS = 20;
-const GOAL_WIDTH = 120;
+const PITCH_WIDTH = 1200;
+const PITCH_HEIGHT = 750;
+const BALL_RADIUS = 20;
+const CURSOR_RADIUS = 25;
+const GOAL_WIDTH = 240;
 
 export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goalEvent }: PitchProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const roomRef = useRef<Room>(room);
+  const ballTrailRef = useRef<{x: number, y: number, color: string}[]>([]);
 
   useEffect(() => {
     roomRef.current = room;
@@ -46,11 +47,31 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    
+    // Handle object-fit: contain letterboxing
+    const canvasAspect = canvas.width / canvas.height;
+    const elementAspect = rect.width / rect.height;
+    
+    let renderWidth = rect.width;
+    let renderHeight = rect.height;
+    let renderX = rect.left;
+    let renderY = rect.top;
+    
+    if (elementAspect > canvasAspect) {
+      renderHeight = rect.height;
+      renderWidth = renderHeight * canvasAspect;
+      renderX = rect.left + (rect.width - renderWidth) / 2;
+    } else {
+      renderWidth = rect.width;
+      renderHeight = renderWidth / canvasAspect;
+      renderY = rect.top + (rect.height - renderHeight) / 2;
+    }
 
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const scaleX = canvas.width / renderWidth;
+    const scaleY = canvas.height / renderHeight;
+
+    const x = (e.clientX - renderX) * scaleX;
+    const y = (e.clientY - renderY) * scaleY;
 
     // Instant local update for buttery smooth 60fps local cursor
     if (roomRef.current && roomRef.current.players[me.id]) {
@@ -260,13 +281,48 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
         ctx.textAlign = 'center';
         ctx.shadowColor = 'rgba(0,0,0,0.8)';
         ctx.shadowBlur = 4;
-        ctx.fillText(p.name.substring(0, 10), 0, -CURSOR_RADIUS - 8);
+        const displayName = p.role === 'gk' ? `[GK] ${p.name.substring(0, 8)}` : p.name.substring(0, 10);
+        ctx.fillText(displayName, 0, -CURSOR_RADIUS - 8);
 
         ctx.restore();
       });
 
-      // Draw ball
+      // Draw ball trail
       const ball = currentRoom.ball;
+      
+      let trailColor = '255, 255, 255'; // default white
+      if (ball.lastTouchedId && currentRoom.players[ball.lastTouchedId]) {
+        const lastPlayer = currentRoom.players[ball.lastTouchedId];
+        if (lastPlayer.team === 'A') trailColor = '6, 182, 212'; // cyan-500
+        else if (lastPlayer.team === 'B') trailColor = '239, 68, 68'; // red-500
+      }
+
+      ballTrailRef.current.push({ x: ball.x, y: ball.y, color: trailColor });
+      if (ballTrailRef.current.length > 15) {
+        ballTrailRef.current.shift();
+      }
+
+      if (ballTrailRef.current.length > 1) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        for (let i = 1; i < ballTrailRef.current.length; i++) {
+          const p1 = ballTrailRef.current[i - 1];
+          const p2 = ballTrailRef.current[i];
+          const progress = i / ballTrailRef.current.length;
+          
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.lineWidth = BALL_RADIUS * 1.5 * progress;
+          ctx.strokeStyle = `rgba(${p2.color}, ${progress * 0.4})`;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Draw ball
       ctx.save();
       ctx.translate(ball.x, ball.y);
       
@@ -355,14 +411,21 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
   const mins = Math.floor(room.timeRemaining / 60);
   const secs = Math.floor(room.timeRemaining % 60).toString().padStart(2, '0');
 
+  const allPlayers = Object.values(room.players).filter(p => p.role !== 'gk');
+  const mostGoalsPlayer = [...allPlayers].sort((a, b) => b.goals - a.goals)[0];
+  const mostTouchesPlayer = [...allPlayers].sort((a, b) => b.touches - a.touches)[0];
+  
+  const mvpGoals = mostGoalsPlayer?.goals > 0 ? mostGoalsPlayer : null;
+  const mvpTouches = mostTouchesPlayer?.touches > 0 ? mostTouchesPlayer : null;
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 p-4">
+    <div className="flex flex-col items-center h-[100dvh] w-screen bg-slate-950 p-2 md:p-4 overflow-hidden">
       {/* Scoreboard */}
-      <div className="w-full max-w-4xl grid grid-cols-3 items-center mb-6 px-2 md:px-6">
+      <div className="w-full max-w-[1600px] grid grid-cols-3 items-center mb-2 md:mb-4 px-2 md:px-6 shrink-0">
         {/* Team A */}
         <div className="flex flex-col md:flex-row items-center md:justify-start gap-2 md:gap-6">
           <div className="text-xl md:text-3xl font-black text-cyan-400 truncate max-w-[150px] md:max-w-[200px]" title={teamAName}>{teamAName}</div>
-          <div className="text-3xl md:text-5xl font-mono bg-slate-900 px-4 py-1 md:px-6 md:py-2 rounded-lg border border-slate-800 text-white">
+          <div className="text-3xl md:text-5xl font-mono bg-slate-900 px-4 py-1 md:px-6 md:py-2 rounded-lg border border-slate-800 text-white shadow-lg">
             {room.score.teamA}
           </div>
         </div>
@@ -370,7 +433,7 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
         {/* Timer */}
         <div className="flex flex-col items-center justify-center">
           <div className="text-slate-400 text-[10px] md:text-sm mb-1 uppercase tracking-widest text-center">Time Remaining</div>
-          <div className={`text-2xl md:text-4xl font-mono ${room.timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-slate-100'}`}>
+          <div className={`text-2xl md:text-4xl font-mono shadow-sm px-4 py-1 rounded bg-slate-900 border border-slate-800 ${room.timeRemaining <= 10 ? 'text-red-500 animate-pulse border-red-900' : 'text-slate-100'}`}>
             {mins}:{secs}
           </div>
         </div>
@@ -378,21 +441,20 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
         {/* Team B */}
         <div className="flex flex-col md:flex-row-reverse items-center md:justify-start gap-2 md:gap-6">
           <div className="text-xl md:text-3xl font-black text-red-400 truncate max-w-[150px] md:max-w-[200px]" title={teamBName}>{teamBName}</div>
-          <div className="text-3xl md:text-5xl font-mono bg-slate-900 px-4 py-1 md:px-6 md:py-2 rounded-lg border border-slate-800 text-white">
+          <div className="text-3xl md:text-5xl font-mono bg-slate-900 px-4 py-1 md:px-6 md:py-2 rounded-lg border border-slate-800 text-white shadow-lg">
             {room.score.teamB}
           </div>
         </div>
       </div>
 
       {/* Pitch Area */}
-      <div className="relative rounded-xl overflow-hidden shadow-2xl shadow-emerald-900/20 border-4 border-slate-800 cursor-crosshair w-full max-w-4xl">
+      <div className="relative rounded-xl overflow-hidden shadow-2xl shadow-emerald-900/20 border-4 border-slate-800 cursor-crosshair w-full max-w-[1600px] flex-1 min-h-0 bg-emerald-800 flex items-center justify-center">
         <canvas
           ref={canvasRef}
           width={PITCH_WIDTH}
           height={PITCH_HEIGHT}
           onMouseMove={handleMouseMove}
-          className="bg-emerald-800 touch-none block w-full h-auto"
-          style={{ aspectRatio: `${PITCH_WIDTH}/${PITCH_HEIGHT}` }}
+          className="touch-none w-full h-full object-contain bg-emerald-800"
         />
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10">
           <span className="text-3xl md:text-6xl font-black text-white mix-blend-overlay uppercase tracking-widest text-center px-4">
@@ -447,6 +509,33 @@ export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goa
                 <div className="text-6xl font-mono text-white">{room.score.teamB}</div>
               </div>
             </div>
+
+            {(mvpGoals || mvpTouches) && (
+              <div className="bg-slate-800 rounded-xl p-4 mb-8 border border-slate-700 text-left">
+                <h3 className="text-emerald-400 font-bold text-lg mb-3 border-b border-slate-700 pb-2">Match MVPs</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {mvpGoals && (
+                    <div>
+                      <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Top Scorer</div>
+                      <div className="text-white font-bold flex items-center truncate">
+                        <div className="w-3 h-3 rounded-full mr-2 shrink-0" style={{ backgroundColor: mvpGoals.color }} />
+                        <span className="truncate">{mvpGoals.name}</span> <span className="ml-1 text-slate-400 font-normal shrink-0">({mvpGoals.goals} goals)</span>
+                      </div>
+                    </div>
+                  )}
+                  {mvpTouches && (
+                    <div>
+                      <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Playmaker</div>
+                      <div className="text-white font-bold flex items-center truncate">
+                        <div className="w-3 h-3 rounded-full mr-2 shrink-0" style={{ backgroundColor: mvpTouches.color }} />
+                        <span className="truncate">{mvpTouches.name}</span> <span className="ml-1 text-slate-400 font-normal shrink-0">({mvpTouches.touches} touches)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <button 
               onClick={() => window.location.reload()}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-lg transition"
