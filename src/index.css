@@ -4,3 +4,9 @@
 @theme {
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
+
+@layer base {
+  body {
+    text-transform: lowercase;
+  }
+}
