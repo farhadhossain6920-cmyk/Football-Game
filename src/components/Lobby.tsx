@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { Room } from '../types';
-import { socket } from '../socket';
-import { Users, Plus, LogIn } from 'lucide-react';
+import { Plus, LogIn } from 'lucide-react';
 
 interface LobbyProps {
-  onJoin: (room: Room) => void;
+  onCreate: (name: string, matchTime: number, maxPlayers: number) => void;
+  onJoin: (name: string, roomId: string) => void;
 }
 
-export function Lobby({ onJoin }: LobbyProps) {
+export function Lobby({ onCreate, onJoin }: LobbyProps) {
   const [name, setName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [matchTime, setMatchTime] = useState(60);
@@ -16,27 +15,13 @@ export function Lobby({ onJoin }: LobbyProps) {
 
   const handleCreate = () => {
     if (!name.trim()) return setError('Please enter your name');
-    
-    socket.emit('createRoom', { name, matchTime, maxPlayers }, (res: any) => {
-      if (res.success) {
-        onJoin(res.room);
-      } else {
-        setError(res.error);
-      }
-    });
+    onCreate(name, matchTime, maxPlayers);
   };
 
   const handleJoin = () => {
     if (!name.trim()) return setError('Please enter your name');
     if (!roomId.trim()) return setError('Please enter a room ID');
-
-    socket.emit('joinRoom', { name, roomId: roomId.toUpperCase() }, (res: any) => {
-      if (res.success) {
-        onJoin(res.room);
-      } else {
-        setError(res.error);
-      }
-    });
+    onJoin(name, roomId.toUpperCase());
   };
 
   return (

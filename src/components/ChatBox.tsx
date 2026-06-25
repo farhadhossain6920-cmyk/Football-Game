@@ -1,37 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { socket } from '../socket';
-import { ChatMessage, Room } from '../types';
+import { ChatMessage } from '../types';
 import { MessageSquare, X } from 'lucide-react';
 
 interface ChatBoxProps {
-  room: Room;
+  messages: ChatMessage[];
+  onSendMessage: (text: string) => void;
 }
 
-export function ChatBox({ room }: ChatBoxProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export function ChatBox({ messages, onSendMessage }: ChatBoxProps) {
   const [input, setInput] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleChatMessage = (msg: ChatMessage) => {
-      setMessages((prev) => [...prev, msg]);
-      if (!isOpen) {
-        setUnreadCount((prev) => prev + 1);
-      }
-    };
-
-    socket.on('chatMessage', handleChatMessage);
-    return () => {
-      socket.off('chatMessage', handleChatMessage);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
     if (isOpen) {
       setUnreadCount(0);
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      if (messages.length > 0) {
+        setUnreadCount(prev => prev + 1);
+      }
     }
   }, [messages, isOpen]);
 
@@ -39,7 +28,7 @@ export function ChatBox({ room }: ChatBoxProps) {
     e.preventDefault();
     if (!input.trim()) return;
 
-    socket.emit('sendMessage', { roomId: room.id, text: input.trim() });
+    onSendMessage(input.trim());
     setInput('');
   };
 

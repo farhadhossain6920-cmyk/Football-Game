@@ -1,26 +1,23 @@
 import React from 'react';
-import { Room } from '../types';
-import { socket } from '../socket';
+import { Room, Player } from '../types';
 import { Play, Copy, Check, Users } from 'lucide-react';
 
 interface WaitingRoomProps {
   room: Room;
+  me: Player;
+  onStart: () => void;
 }
 
-export function WaitingRoom({ room }: WaitingRoomProps) {
+export function WaitingRoom({ room, me, onStart }: WaitingRoomProps) {
   const [copied, setCopied] = React.useState(false);
   
-  const isHost = room.hostId === socket.id;
+  const isHost = room.hostId === me.id;
   const players = Object.values(room.players);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(room.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleStart = () => {
-    socket.emit('startGame', room.id);
   };
 
   return (
@@ -75,7 +72,7 @@ export function WaitingRoom({ room }: WaitingRoomProps) {
 
         {isHost ? (
           <button
-            onClick={handleStart}
+            onClick={onStart}
             disabled={players.length < 1}
             className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition text-lg"
           >

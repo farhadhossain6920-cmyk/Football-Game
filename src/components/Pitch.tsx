@@ -1,11 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Room } from '../types';
-import { socket } from '../socket';
+import { Room, Player, ChatMessage } from '../types';
 import confetti from 'canvas-confetti';
 import { ChatBox } from './ChatBox';
 
 interface PitchProps {
   room: Room;
+  me: Player;
+  onCursorMove: (x: number, y: number) => void;
+  chatMessages: ChatMessage[];
+  onSendMessage: (text: string) => void;
+  goalEvent: string | null;
 }
 
 const PITCH_WIDTH = 800;
@@ -14,48 +18,20 @@ const BALL_RADIUS = 15;
 const CURSOR_RADIUS = 20;
 const GOAL_WIDTH = 120;
 
-export function Pitch({ room }: PitchProps) {
+export function Pitch({ room, me, onCursorMove, chatMessages, onSendMessage, goalEvent }: PitchProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef(room);
   
-  const [score, setScore] = useState(room.score);
-  const [timeRemaining, setTimeRemaining] = useState(room.timeRemaining);
-  const [goalEvent, setGoalEvent] = useState<string | null>(null);
-
   useEffect(() => {
-    stateRef.current = room;
-    setScore(room.score);
-    setTimeRemaining(room.timeRemaining);
-  }, [room]);
-
-  useEffect(() => {
-    const handleGameState = (state: any) => {
-      stateRef.current.ball = state.ball;
-      stateRef.current.players = state.players;
-      setScore(state.score);
-      setTimeRemaining(state.timeRemaining);
-    };
-
-    const handleGoal = ({ team }: { team: string }) => {
-      setGoalEvent(team);
+    if (goalEvent) {
       confetti({
         particleCount: 150,
         spread: 80,
         origin: { y: 0.6 },
-        colors: team === 'A' ? ['#22d3ee', '#ffffff'] : ['#f87171', '#ffffff'],
+        colors: goalEvent === 'A' ? ['#22d3ee', '#ffffff'] : ['#f87171', '#ffffff'],
         zIndex: 100
       });
-      setTimeout(() => setGoalEvent(null), 2000);
-    };
-
-    socket.on('gameState', handleGameState);
-    socket.on('goalScored', handleGoal);
-
-    return () => {
-      socket.off('gameState', handleGameState);
-      socket.off('goalScored', handleGoal);
-    };
-  }, []);
+    }
+  }, [goalEvent]);
 
   // Handle local mouse move
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -69,7 +45,7 @@ export function Pitch({ room }: PitchProps) {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
-    socket.emit('cursorMove', { roomId: room.id, x, y });
+    onCursorMove(x, y);
   };
 
   // Render loop
@@ -82,8 +58,6 @@ export function Pitch({ room }: PitchProps) {
     let animationFrameId: number;
 
     const render = () => {
-      const state = stateRef.current;
-      
       // Clear pitch
       ctx.fillStyle = '#166534'; // emerald-800
       ctx.fillRect(0, 0, PITCH_WIDTH, PITCH_HEIGHT);
@@ -113,7 +87,7 @@ export function Pitch({ room }: PitchProps) {
       ctx.strokeRect(PITCH_WIDTH - 40, goalTop, 40, GOAL_WIDTH);
 
       // Draw players
-      Object.values(state.players).forEach(p => {
+      Object.values(room.players).forEach(p => {
         if (p.x < 0 || p.y < 0) return; // ignore if off-pitch
         
         ctx.save();
@@ -122,7 +96,7 @@ export function Pitch({ room }: PitchProps) {
         ctx.fillStyle = p.color;
         ctx.fill();
         ctx.lineWidth = 2;
-        ctx.strokeStyle = '#fff';
+        ctx.strokeStyle = p.id === me.id ? '#fbbf24' : '#fff';
         ctx.stroke();
 
         ctx.fillStyle = '#fff';
@@ -133,7 +107,7 @@ export function Pitch({ room }: PitchProps) {
       });
 
       // Draw ball
-      const ball = state.ball;
+      const ball = room.ball;
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
       ctx.fillStyle = '#fff';
@@ -157,10 +131,10 @@ export function Pitch({ room }: PitchProps) {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [room.id]);
+  }, [room]); // Re-render when room updates
 
-  const mins = Math.floor(timeRemaining / 60);
-  const secs = Math.floor(timeRemaining % 60).toString().padStart(2, '0');
+  const mins = Math.floor(room.timeRemaining / 60);
+  const secs = Math.floor(room.timeRemaining % 60).toString().padStart(2, '0');
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 p-4">
@@ -170,14 +144,14 @@ export function Pitch({ room }: PitchProps) {
         <div className="flex flex-col md:flex-row items-center md:justify-start gap-2 md:gap-6">
           <div className="text-xl md:text-3xl font-black text-cyan-400">TEAM A</div>
           <div className="text-3xl md:text-5xl font-mono bg-slate-900 px-4 py-1 md:px-6 md:py-2 rounded-lg border border-slate-800 text-white">
-            {score.teamA}
+            {room.score.teamA}
           </div>
         </div>
 
         {/* Timer */}
         <div className="flex flex-col items-center justify-center">
           <div className="text-slate-400 text-[10px] md:text-sm mb-1 uppercase tracking-widest text-center">Time Remaining</div>
-          <div className={`text-2xl md:text-4xl font-mono ${timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-slate-100'}`}>
+          <div className={`text-2xl md:text-4xl font-mono ${room.timeRemaining <= 10 ? 'text-red-500 animate-pulse' : 'text-slate-100'}`}>
             {mins}:{secs}
           </div>
         </div>
@@ -186,7 +160,7 @@ export function Pitch({ room }: PitchProps) {
         <div className="flex flex-col md:flex-row-reverse items-center md:justify-start gap-2 md:gap-6">
           <div className="text-xl md:text-3xl font-black text-red-400">TEAM B</div>
           <div className="text-3xl md:text-5xl font-mono bg-slate-900 px-4 py-1 md:px-6 md:py-2 rounded-lg border border-slate-800 text-white">
-            {score.teamB}
+            {room.score.teamB}
           </div>
         </div>
       </div>
@@ -225,12 +199,12 @@ export function Pitch({ room }: PitchProps) {
             <div className="flex justify-center items-center space-x-8 mb-8">
               <div className="text-center">
                 <div className="text-cyan-400 font-bold mb-2">Team A</div>
-                <div className="text-6xl font-mono text-white">{score.teamA}</div>
+                <div className="text-6xl font-mono text-white">{room.score.teamA}</div>
               </div>
               <div className="text-slate-500 text-3xl font-light">-</div>
               <div className="text-center">
                 <div className="text-red-400 font-bold mb-2">Team B</div>
-                <div className="text-6xl font-mono text-white">{score.teamB}</div>
+                <div className="text-6xl font-mono text-white">{room.score.teamB}</div>
               </div>
             </div>
             <button 
@@ -243,7 +217,7 @@ export function Pitch({ room }: PitchProps) {
         </div>
       )}
 
-      <ChatBox room={room} />
+      <ChatBox messages={chatMessages} onSendMessage={onSendMessage} />
     </div>
   );
 }
